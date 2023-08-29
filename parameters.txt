@@ -1,0 +1,19 @@
+## Space
+- LISTOFPROBABILITIES: [0.1, 0.75, 0.05, 0.03, 0.15] (Probability of transfer of salmonella per zone)
+- GRIDSIZE: [1000.0, 1000.0] (Size of the grid)
+- MAX_MOVE: 25 (Maximum move value)
+- MEAN_MOVE: 5 (Mean move value)
+- STD_MOVE: 10 (Standard deviation of move value)
+
+## Disease
+- TRANSFER_DISTANCE: 1 (Maximum distance for disease transmission)
+
+## Collection
+- AGE_OF_HOSTCOLLECTION: 25 days
+- AGE_OF_DEPOSITCOLLECTION: 1 days
+- FAECAL_CLEANUP_FREQUENCY: 6 times per day
+
+## Resolution
+- STEP: 20 (Chickens per unit distance)
+- HOUR_STEP: 4 (Chickens move per hour)
+- LENGTH: 720 (Simulation duration in hours)

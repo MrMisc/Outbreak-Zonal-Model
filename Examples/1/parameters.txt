@@ -1,0 +1,27 @@
+## Space
+- LISTOFPROBABILITIES: [0.1, 0.75, 0.05, 0.03, 0.15] (Probability of transfer of salmonella per zone)
+- GRIDSIZE: [1000.0, 1000.0] (Size of the grid)
+- MAX_MOVE: 25 (Maximum move value)
+- MEAN_MOVE: 5 (Mean move value)
+- STD_MOVE: 10 (Standard deviation of move value)
+
+## Disease
+- TRANSFER_DISTANCE: 1 (Maximum distance for disease transmission)
+
+## Collection
+- AGE_OF_HOSTCOLLECTION: 25 days
+- AGE_OF_DEPOSITCOLLECTION: 1 days
+- FAECAL_CLEANUP_FREQUENCY: 6 times per day
+
+## Import parameters
+-const PROBABILITY_OF_INFECTION:f64 = 0.1; //probability of imported host being infected
+const MEAN_AGE:f64 = 5.0*24.0; //Mean age of hosts imported (IN HOURS)
+const STD_AGE:f64 = 3.0*24.0;//Standard deviation of host age (when using normal distribution)
+const MAX_AGE:f64 = 11.0*24.0; //Maximum age of host accepted (Note: as of now, minimum age is 0.0)
+const DEFECATION_RATE:f64 = 1.0; //Number times a day host is expected to defecate
+const DEPOSIT_RATE:f64 = 1.0; //Number of times a day host is expected to deposit a consumable deposit
+
+## Resolution
+- STEP: 20 (Chickens per unit distance)
+- HOUR_STEP: 4 (Chickens move per hour)
+- LENGTH: 720 (Simulation duration in hours)
