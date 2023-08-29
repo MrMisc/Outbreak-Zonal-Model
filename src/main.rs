@@ -113,8 +113,8 @@ impl Zone{
     }
     fn generate_full(zone:usize,grid:[u64;2],step:usize)->Zone{
         let mut vector:Vec<Segment> = Vec::new();
-        for x in 0..grid[0]{
-            for y in 0..grid[1]{
+        for x in (0..grid[0]).step_by(step){
+            for y in (0..grid[1]).step_by(step){
                 vector.push(Segment{zone:zone.clone(),origin_x:x,origin_y:y,range_x:step.clone() as u64,range_y:step.clone() as u64,capacity:0})
             }
         }
@@ -181,28 +181,27 @@ impl host{
             }
         }).collect()
     }
-    fn transport(mut vector:Vec<host>,space:&mut Vec<Zone>)->Vec<host>{ //Also to change ;size if you change number of zones
+    fn transport(mut vector:&mut Vec<host>,space:&mut Vec<Zone>){ //Also to change ;size if you change number of zones
         let mut output:Vec<host> = Vec::new();
         for zone in (0..space.len()).rev(){
             let mut __:u32 = space.clone()[zone].capacity;
             if &space[zone].capacity>&0 && zone>0{ //If succeeding zones (obviously zone 0 doesn't have do to this - that needs to be done with a replace mechanism)
                 let zone_toedit:&mut Zone = &mut space[zone];
-                let mut vector:Vec<host> = vector.clone().into_iter().filter_map(|mut x| {
+                vector.iter_mut().for_each(|mut x| {
                     if x.zone == zone-1 && x.time>ages[zone-1] && __>0{ //Hosts in previous zone that have spent enough time spent in previous zone
                         //Find the first available segment
                         __ -= 1;
                         space[zone-1] = space[zone-1].clone().subtract(x.origin_x.clone(),x.origin_y); //move host from previous zone
                         // println!("{} capacity for zone {} vs {} for zone {}", &space[zone-1].capacity, zone-1,&space[zone].capacity,zone);
-                        x.zone = zone;
+                        x.zone += 1;
                         let mut __:u64 = 0;
                         let mut ___:u64 = 0;
                         // println!("Going to deduct capacity @  zone {} with a capacity of {}", zone,zone_toedit.clone().zone);
 
                         [x.origin_x,x.origin_y,__,___] = space[zone].add();                            
                     }
-                    Some(x)
-                }).collect();
-            output.append(&mut vector);
+                })
+            // output.append(&mut vector);
             }
             else if zone == 0 && space[zone].capacity>0 && INFLUX{ //replace mechanism
                 // let mut zone_0:&mut Zone = &mut space[0];
@@ -222,7 +221,6 @@ impl host{
             }
         }
     }
-    output
 }
 
 
@@ -508,7 +506,15 @@ fn main(){
         //Collect the hosts and deposits as according
         feast.append(&mut collect);
         if time%24==0{
-            chickens = host::transport(chickens,&mut zones);
+            host::transport(&mut chickens,&mut zones);
+            // let mut noinzone1:u64 = 0;
+            // let mut noinzone0:u64 = 0;
+            // for i in chickens.clone(){
+            //     if i.zone == 0{noinzone0+=1;}
+            //     else if i.zone == 1{noinzone1+=1;}
+            //     println!("CHICKEN IS NOW IN ZONE {}", i.zone);
+            // }
+            // println!("{} chickens in zone 0, {} chickens in zone 1", noinzone0,noinzone1);
         }
         let mut count:u8 = 0;
         for i in zones.clone(){
