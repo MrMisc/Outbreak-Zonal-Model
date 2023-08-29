@@ -60,7 +60,8 @@ pub fn normal(mean: f64, std: f64, upper:f64) -> f64 {
 #[derive(Clone)]
 pub struct Zone{
     segments:Vec<Segment>, 
-    zone:usize
+    zone:usize,
+    capacity:u32
 }
 
 #[derive(Clone)]
@@ -70,9 +71,56 @@ pub struct Segment{
     origin_y:u64,
     range_x:u64,
     range_y:u64,
-    capacity:u8
+    capacity:u32
 }
 
+impl Zone{
+    fn add(&mut self)->[u64;4]{
+        println!("Adding to {}",self.zone);
+        self.capacity-=1;
+        let mut origin_x:u64 = 0;
+        let mut origin_y:u64 = 0;
+        let mut range_x:u64 = 0;
+        let mut range_y:u64 = 0;
+        if let Some(first_space) = self.segments.iter_mut().find(|item| item.capacity == 1){ //0 occupants 
+            //Segment capacity update
+            first_space.capacity -= 1; //add 1 occupant
+            origin_x = first_space.origin_x;
+            origin_y = first_space.origin_y;
+            range_x = first_space.range_x;
+            range_y = first_space.range_y;
+        }        
+        [origin_x,origin_y,range_x,range_y]
+    }
+    fn subtract(mut self,x:u64,y:u64)->Zone{
+        self.capacity+=1;
+        self.segments = self.segments.into_iter().filter_map(|mut seg| {
+            if x == seg.origin_x && y == seg.origin_y{
+                seg.capacity += 1;
+            }
+            Some(seg)
+        }).collect();
+        self
+    }
+    fn generate_empty(zone:usize,grid:[u64;2],step:usize)->Zone{
+        let mut vector:Vec<Segment> = Vec::new();
+        for x in (0..grid[0]).step_by(step){
+            for y in (0..grid[1]).step_by(step){
+                vector.push(Segment{zone:zone.clone(),origin_x:x,origin_y:y,range_x:step.clone() as u64,range_y:step.clone() as u64,capacity:NO_OF_CHICKENS_PER_SEGMENT as u32})
+            }
+        }
+        Zone{segments:vector,zone:zone, capacity:(grid[0] as u32)*(grid[1] as u32)/ ((step*step) as u32)}
+    }
+    fn generate_full(zone:usize,grid:[u64;2],step:usize)->Zone{
+        let mut vector:Vec<Segment> = Vec::new();
+        for x in 0..grid[0]{
+            for y in 0..grid[1]{
+                vector.push(Segment{zone:zone.clone(),origin_x:x,origin_y:y,range_x:step.clone() as u64,range_y:step.clone() as u64,capacity:0})
+            }
+        }
+        Zone{segments:vector,zone:zone, capacity:0}
+    }    
+}
 
 #[derive(Clone)]
 pub struct host{
@@ -93,13 +141,14 @@ pub struct host{
 }
 //Note that if you want to adjust the number of zones, you have to, in addition to adjusting the individual values to your liking per zone, also need to change the slice types below!
 //Space
-const LISTOFPROBABILITIES:[f64;5] = [0.1,0.75,0.05,0.3,0.15]; //Probability of transfer of samonella per zone - starting from zone 0 onwards
+const LISTOFPROBABILITIES:[f64;5] = [0.8,0.75,0.05,0.3,0.15]; //Probability of transfer of samonella per zone - starting from zone 0 onwards
 const GRIDSIZE:[[f64;2];5] = [[1000.0,1000.0],[1000.0,1000.0],[200.0,200.0],[1000.0,1000.0],[1000.0,1000.0]];
 const MAX_MOVE:f64 = 25.0;
 const MEAN_MOVE:f64 = 5.0;
 const STD_MOVE:f64 = 10.0;
+const NO_OF_CHICKENS_PER_SEGMENT:u8 = 1;
 //Disease 
-const TRANSFER_DISTANCE: f64 = 1.0;//maximum distance over which hosts can trasmit diseases to one another
+const TRANSFER_DISTANCE: f64 = 0.70;//maximum distance over which hosts can trasmit diseases to one another
 //Host parameters
 const PROBABILITY_OF_INFECTION:f64 = 1.0/2500.0; //probability of imported host being infected
 const MEAN_AGE:f64 = 5.0*24.0; //Mean age of hosts imported (IN HOURS)
@@ -110,13 +159,18 @@ const DEPOSIT_RATE:f64 = 1.0; //Number of times a day host is expected to deposi
 //Transfer parameters
 const ages:[f64;5] = [1.0*24.0,2.0*24.0,3.0*24.0,4.0*24.0,6.0*24.0]; //Ages when chickens are expected to leave the 
 //Collection
-const AGE_OF_HOSTCOLLECTION: f64 = 25.0*24.0;  //For instance if you were collecting chickens every 15 days
+const AGE_OF_HOSTCOLLECTION: f64 = 45.0*24.0;  //For instance if you were collecting chickens every 15 days
 const AGE_OF_DEPOSITCOLLECTION:f64 = 1.0*24.0; //If you were collecting their eggs every 3 days
 const FAECAL_CLEANUP_FREQUENCY:usize = 4; //How many times a day do you want faecal matter to be cleaned up?
 //Resolution
 const STEP:[usize;5] = [20,20,20,20,20];  //Unit distance between hosts ->Could be used to make homogeneous zoning (Might not be very flexible a modelling decision)
 const HOUR_STEP: f64 = 4.0; //Number of times hosts move per hour
-const LENGTH: usize = 30*24; //How long do you want the simulation to be?
+const LENGTH: usize = 10*24; //How long do you want the simulation to be?
+//Influx? Do you want new chickens being fed into the scenario everytime the first zone exports some to the succeeding zones?
+const INFLUX:bool = false;
+//Restriction?
+const RESTRICTION:bool = true;
+
 impl host{
     fn infect(vector: Vec<host>,loc_x:u64,loc_y:u64)->Vec<host>{
         vector.into_iter().filter_map(|mut host_| {
@@ -127,49 +181,52 @@ impl host{
             }
         }).collect()
     }
-    // fn locate_vacancy(zone:usize,vector:Vec<host>,grid:&[u64;2],step:usize)->Vec<[u64;2]>{//RETURN ALL vacant points for one call
-    //     let mut places:Vec<[u64;2]> = Vec::new();
-    //     for x in (0...grid[0]).step_by(step){
-    //         for y in (0..grid[1]).step_by(step){
-    //             places.push([x,y]);
-    //         }
-    //     }
-
-    // }
-    fn transport(vector:Vec<host>,capacity:&mut [u64;5],space:&mut Vec<Zone>)->Vec<host>{ //Also to change ;size if you change number of zones
-        //Where in the new zone are they transported? Presumably in a free segment (cage). If that is the case, we are going to need to filter and search for an empty slot using origin
-        //Need to find a vacant area using coordinates origin_x,origin_y -> chicken's range_x and range_y will be changed according to the vacant area that has been first found
-        //Solution: 2 checks -a  repeatable basic numeric check, and a granular check if the first check passes only -> save bandwidth
-
-        //Simple check
-        //Zone availability check - takes precedence over age appropriateness of host
-        // let available:Vec<u64> = Vec::new();
-        for zone in 0..capacity.len(){
-            if capacity[zone]>0{
-                let zone_toedit:&mut Zone = &mut space[zone+1];
-                let vector:Vec<host> = vector.into_iter().filter_map(|mut x| {
-                    if x.zone == zone-1 && x.time>ages[zone-1]{ //Space availability AND enough time spent inside zone
+    fn transport(mut vector:Vec<host>,space:&mut Vec<Zone>)->Vec<host>{ //Also to change ;size if you change number of zones
+        let mut output:Vec<host> = Vec::new();
+        for zone in (0..space.len()).rev(){
+            let mut __:u32 = space.clone()[zone].capacity;
+            if &space[zone].capacity>&0 && zone>0{ //If succeeding zones (obviously zone 0 doesn't have do to this - that needs to be done with a replace mechanism)
+                let zone_toedit:&mut Zone = &mut space[zone];
+                let mut vector:Vec<host> = vector.clone().into_iter().filter_map(|mut x| {
+                    if x.zone == zone-1 && x.time>ages[zone-1] && __>0{ //Hosts in previous zone that have spent enough time spent in previous zone
                         //Find the first available segment
-                        if let Some(first_space) = zone_toedit.segments.iter_mut().find(|item| item.capacity == 0){
-                            x.zone = zone;
-                            x.origin_x = first_space.origin_x;
-                            x.origin_y = first_space.origin_y;
-    
-                            //Update capacity
-                            capacity[zone] += 1;
-                            capacity[zone+1] -= 1;
+                        __ -= 1;
+                        space[zone-1] = space[zone-1].clone().subtract(x.origin_x.clone(),x.origin_y); //move host from previous zone
+                        // println!("{} capacity for zone {} vs {} for zone {}", &space[zone-1].capacity, zone-1,&space[zone].capacity,zone);
+                        x.zone = zone;
+                        let mut __:u64 = 0;
+                        let mut ___:u64 = 0;
+                        // println!("Going to deduct capacity @  zone {} with a capacity of {}", zone,zone_toedit.clone().zone);
 
-                            //Segment capacity update
-                            first_space.capacity -= 1;
-                            
-                        }
+                        [x.origin_x,x.origin_y,__,___] = space[zone].add();                            
                     }
                     Some(x)
                 }).collect();
+            output.append(&mut vector);
+            }
+            else if zone == 0 && space[zone].capacity>0 && INFLUX{ //replace mechanism
+                // let mut zone_0:&mut Zone = &mut space[0];
+                for _ in 0..space[zone].clone().capacity as usize{
+                    // let [x,y]:[u64;2] = space[zone].add();
+                    //Roll probability
+                    let mut rng = thread_rng();
+                    let roll = Uniform::new(0.0, 1.0);
+                    let rollnumber: f64 = rng.sample(roll);
+                    let [x,y,range_x,range_y] = space[0].add(); 
+                    if rollnumber<PROBABILITY_OF_INFECTION{
+                        vector.push(host::new_inf(0,0.2,x as f64,y as f64,RESTRICTION,range_x,range_y));
+                    }
+                    else{
+                        vector.push(host::new(0,0.2,x as f64,y as f64,RESTRICTION,range_x,range_y));
+                    }
             }
         }
-        vector
     }
+    output
+}
+
+
+
     fn transfer(&self)->bool{ //using prob1 as the probability of contracting disease  (in other words, no separation of events between transferring and capturing disease. If something is infected, it is always infected. Potentially.... the prospective new host will not get infected, but the INFECTED is always viably transferring)
         let mut rng = thread_rng();
         let roll = Uniform::new(0.0, 1.0);
@@ -177,15 +234,15 @@ impl host{
         // println!("DISEASE   {}",rollnumber);
         rollnumber < self.prob1
     }
-    fn new(zone:usize, std:f64,loc_x:u64, loc_y:u64,restriction:bool,range_x:u64,range_y:u64)->host{
+    fn new(zone:usize, std:f64,loc_x:f64, loc_y:f64,restriction:bool,range_x:u64,range_y:u64)->host{
         //We shall make it such that the chicken is spawned within the bottom left corner of each "restricted grid" - ie cage
         let prob:f64 = LISTOFPROBABILITIES[zone.clone()];
         //Add a random age generator
-        host{infected:false,motile:0,zone:zone,prob1:prob,prob2:std,x:loc_x as f64,y:loc_y as f64,age:normal(MEAN_AGE,STD_AGE,MAX_AGE),time:0.0, origin_x:loc_x,origin_y:loc_y,restrict:restriction,range_x:range_x,range_y:range_y}
+        host{infected:false,motile:0,zone:zone,prob1:prob,prob2:std,x:loc_x as f64,y:loc_y as f64,age:normal(MEAN_AGE,STD_AGE,MAX_AGE),time:0.0, origin_x:loc_x as u64,origin_y:loc_y as u64,restrict:restriction,range_x:range_x,range_y:range_y}
     }
-    fn new_inf(zone:usize, std:f64,loc_x:u64, loc_y:u64,restriction:bool,range_x:u64,range_y:u64)->host{
+    fn new_inf(zone:usize, std:f64,loc_x:f64, loc_y:f64,restriction:bool,range_x:u64,range_y:u64)->host{
         let prob:f64 = LISTOFPROBABILITIES[zone.clone()];
-        host{infected:true,motile:0,zone:zone,prob1:prob,prob2:std,x:loc_x as f64,y:loc_y as f64,age:normal(MEAN_AGE,STD_AGE,MAX_AGE),time:0.0, origin_x:loc_x,origin_y:loc_y,restrict:restriction,range_x:range_x,range_y:range_y}
+        host{infected:true,motile:0,zone:zone,prob1:prob,prob2:std,x:loc_x as f64,y:loc_y as f64,age:normal(MEAN_AGE,STD_AGE,MAX_AGE),time:0.0, origin_x:loc_x as u64,origin_y:loc_y as u64,restrict:restriction,range_x:range_x,range_y:range_y}
     }
     fn deposit(self, consumable: bool)->host{ //Direct way to lay deposit from host. The function is 100% deterministic and layering a probability clause before this is typically expected
         let zone = self.zone.clone();
@@ -292,7 +349,7 @@ impl host{
                 let before = x.infected.clone();
                 x.infected=x.transfer();
                 if !before && x.infected{
-                    println!("{} {} {}",x.x,x.y,time);
+                    if x.x!=0.0 && x.y != 0.0{println!("{} {} {} {}",x.x,x.y,time,x.zone);}
                 }
                 // println!("{} vs {}",&inf.x,&x.x,&inf.y,&x.y);
                 Some(x)
@@ -371,30 +428,62 @@ impl host{
 
         [inf/(noofhosts+1.0),inf2/(noofhosts2+1.0),noofhosts,noofhosts2]
     }
+    fn generate_in_grid(zone:&mut Zone,hosts:&mut Vec<host>){ 
+        let zone_no:usize = zone.clone().zone;
+        zone.segments.iter_mut().for_each(|mut x| {
+            hosts.push(host::new(zone_no,0.2,x.origin_x as f64,x.origin_y as f64,RESTRICTION,x.range_x,x.range_y));
+            x.capacity -= 1;
+            zone.capacity -= 1;
+        });
+    }
 }
 
 
 fn main(){
-    let mut capacity:[u64;5] = [0;5];
-    
-    for i in 0..STEP.len(){
-        capacity[i] = (GRIDSIZE[i][0] as u64)*(GRIDSIZE[i][1] as u64)/ ((STEP[i]*STEP[i]) as u64)
-    }
-    //generate chickens 10 units apart from one another
     let mut chickens: Vec<host> = Vec::new();
     let mut feast: Vec<host> =  Vec::new();
-    let step = STEP[0];
-    //GENERATE CLEAN HOSTS
-    for i in (0..GRIDSIZE[0][0] as u64).step_by(step){
-        // println!("{}",i as f64)
-        for j in (0..GRIDSIZE[0][1] as u64).step_by(step){
-            chickens.push(host::new(0,0.2,i,j,true,step as u64,step as u64));
-        }
+    let mut zones:Vec<Zone> = Vec::new();
+    
+    //GENERATE CLEAN HOSTS AND ZONES/SUBSETS
+    // for i in (0..GRIDSIZE[0][0] as u64).step_by(step){
+    //     // println!("{}",i as f64)
+    //     for j in (0..GRIDSIZE[0][1] as u64).step_by(step){
+    //         chickens.push(host::new(0,0.2,i,j,true,step as u64,step as u64));
+    //     }
+    // }
+    //Initialise with chickens in the first zone only
+    for grid in 0..GRIDSIZE.len(){
+        zones.push(Zone::generate_empty(grid,[GRIDSIZE[grid][0] as u64,GRIDSIZE[grid][1] as u64],STEP[grid]));
     }
+    // let mut segmentation: &mut Vec<Segment> = &mut zone.segments;
+    // for x_point in (0..GRIDSIZE[grid][0] as u64).step_by(STEP[grid]){
+    //     for y_point in (0..GRIDSIZE[grid][1] as u64).step_by(STEP[grid]){
+    //         //EQUIDISTANT GENERATION - HOMOEGENEOUS (to be edited at will later)
+    //         //Generate chickens
+    //         chickens.push(host::new(0,0.2,x_point,y_point,true,STEP[grid],STEP[grid] ));
+    //         capacity[grid] -= 1; //Register the chicken as taking up one capacity
+    //         segmentation.push(Segment{zone:grid,origin_x:x_point,origin_y:y_point,range_x:STEP[grid], range_y:STEP[grid], capacity:0})
+    //     }
+    // }
+    // println!("{:?}",chickens.len());
+    for i in zones.clone(){
+        println!("CAPACITIES: {}",i.capacity);
+    }
+    host::generate_in_grid(&mut zones[0],&mut chickens);
+    for i in zones.clone(){
+        println!("CAPACITIES: {}",i.capacity);
+    }
+    // println!("{:?}", chickens.len());
+    // for thing in chickens.clone(){
+    //     println!("Located at zone {} in {} {}: MOTION PARAMS: {} for {} and {} for {}",thing.zone,thing.x,thing.y,thing.origin_x,thing.range_x,thing.origin_y,thing.range_y);
+    // }
     //GENERATE INFECTED HOST
     // chickens.push(host::new_inf(1,0.2,(GRIDSIZE[0] as u64)/2,(GRIDSIZE[1] as u64)/2),true,STEP as u64,STEP as u64); // the infected
     chickens = host::infect(chickens,400,400);
-
+    //Count number of infected
+    // let it: u64 = chickens.clone().into_iter().filter(|x| x.infected).collect()::<Vec<_>>.len();
+    let mut vecc_into: Vec<host> = chickens.clone().into_iter().filter(|x| x.infected).collect::<Vec<_>>(); //With this re are RETAINING the hosts and deposits within the original vector
+    println!("NUMBER OF INFECTED CHICKENS IS {}", vecc_into.len());
     //CSV FILE
     let filestring: String = format!("./output.csv");
     if fs::metadata(&filestring).is_ok() {
@@ -418,6 +507,14 @@ fn main(){
         [chickens,collect] = host::collect_and_replace(chickens);
         //Collect the hosts and deposits as according
         feast.append(&mut collect);
+        if time%24==0{
+            chickens = host::transport(chickens,&mut zones);
+        }
+        let mut count:u8 = 0;
+        for i in zones.clone(){
+            println!("{} : {}", count,i.capacity);
+            count+=1;
+        }
         //Farm
         let perc = host::report(&chickens)[0]*100.0;
         let total_hosts = host::report(&chickens)[2];
@@ -482,7 +579,7 @@ fn main(){
 
     // Resolution
     writeln!(file, "\n## Resolution").expect("Failed to write to file");
-    writeln!(file, "- STEP: {} (Chickens per unit distance)", step).expect("Failed to write to file");
+    writeln!(file, "- STEP: {} (Chickens per unit distance)", STEP[0]).expect("Failed to write to file");
     writeln!(file, "- HOUR_STEP: {} (Chickens move per hour)", HOUR_STEP).expect("Failed to write to file");
     writeln!(file, "- LENGTH: {} (Simulation duration in hours)", LENGTH).expect("Failed to write to file");
 
