@@ -157,19 +157,21 @@ const MAX_AGE:f64 = 11.0*24.0; //Maximum age of host accepted (Note: as of now, 
 const DEFECATION_RATE:f64 = 1.0; //Number times a day host is expected to defecate
 const DEPOSIT_RATE:f64 = 1.0; //Number of times a day host is expected to deposit a consumable deposit
 //Transfer parameters
-const ages:[f64;5] = [1.0*24.0,1.0*24.0,1.0*24.0,1.0*24.0,2.0*24.0]; //Time hosts are expected spend in each region minimally
+const ages:[f64;5] = [2.4;5]; //Time hosts are expected spend in each region minimally
 //Collection
 const AGE_OF_HOSTCOLLECTION: f64 = 20.0*24.0;  //For instance if you were collecting chickens every 15 days
-const AGE_OF_DEPOSITCOLLECTION:f64 = 1.0*24.0; //If you were collecting their eggs every 3 days
+const COLLECT_DEPOSITS: bool = false;
+const AGE_OF_DEPOSITCOLLECTION:f64 = 100.0*24.0; //If you were collecting their eggs every 3 days
 const FAECAL_CLEANUP_FREQUENCY:usize = 4; //How many times a day do you want faecal matter to be cleaned up?
 //or do we do time collection instead?
-const TIME_OF_COLLECTION :f64 = 3.0*24.0;
+const TIME_OF_COLLECTION :f64 = 12.0;
 //Resolution
-const STEP:[usize;5] = [20,20,20,20,20];  //Unit distance between hosts ->Could be used to make homogeneous zoning (Might not be very flexible a modelling decision)
+const STEP:[usize;5] = [5,20,20,20,20];  //Unit distance between hosts ->Could be used to make homogeneous zoning (Might not be very flexible a modelling decision)
 const HOUR_STEP: f64 = 4.0; //Number of times hosts move per hour
 const LENGTH: usize = 15*24; //How long do you want the simulation to be?
 //Influx? Do you want new chickens being fed into the scenario everytime the first zone exports some to the succeeding zones?
-const INFLUX:bool = false;
+const INFLUX:bool = true;
+const PERIOD_OF_INFLUX:u8 = 24; //How many hours before new batch of hosts are imported?
 //Restriction?
 const RESTRICTION:bool = true;
 
@@ -183,7 +185,7 @@ impl host{
             }
         }).collect()
     }
-    fn transport(mut vector:&mut Vec<host>,space:&mut Vec<Zone>){ //Also to change ;size if you change number of zones
+    fn transport(mut vector:&mut Vec<host>,space:&mut Vec<Zone>, influx: bool){ //Also to change ;size if you change number of zones
         let mut output:Vec<host> = Vec::new();
         for zone in (0..space.len()).rev(){
             let mut __:u32 = space.clone()[zone].capacity;
@@ -388,6 +390,24 @@ impl host{
         }).collect();
         [vec1,collection]  //collection vector here to be added and pushed into the original collection vector from the start of the loop! This function merely outputs what should be ADDED to collection!
     }
+    fn collect__(inventory:Vec<host>)->[Vec<host>;2]{   //hosts and deposits potentially get collected
+        let mut collection:Vec<host> = Vec::new();
+        let vec1:Vec<host> = inventory.into_iter().filter_map(|mut x| {
+            // println!("Chicken in zone {}",x.zone);
+            if x.motile==0 && x.time>TIME_OF_COLLECTION && x.zone == GRIDSIZE.len()-1{
+                println!("Collecting host(s)...{} days old",x.age/24.0);
+                collection.push(x);
+                None
+            }else if x.motile == 1 && x.age>AGE_OF_DEPOSITCOLLECTION && COLLECT_DEPOSITS{
+                // println!("Collecting deposit(s)...");
+                collection.push(x);
+                None
+            }else{
+                Some(x)
+            }
+        }).collect();
+        [vec1,collection]  //collection vector here to be added and pushed into the original collection vector from the start of the loop! This function merely outputs what should be ADDED to collection!
+    }    
     fn collect_and_replace(inventory:Vec<host>)->[Vec<host>;2]{   //same as collect but HOSTS GET REPLACED (with a Poisson rate of choosing) - note that this imports hosts, doesn't transfer from earlier zone
         let mut collection:Vec<host> = Vec::new();
         let vec1:Vec<host> = inventory.into_iter().filter_map(|mut x| {
@@ -465,6 +485,9 @@ fn main(){
     let mut chickens: Vec<host> = Vec::new();
     let mut feast: Vec<host> =  Vec::new();
     let mut zones:Vec<Zone> = Vec::new();
+
+    //Influx parameter
+    let mut influx:bool = INFLUX;
     
     //GENERATE CLEAN HOSTS AND ZONES/SUBSETS
     // for i in (0..GRIDSIZE[0][0] as u64).step_by(step){
@@ -528,11 +551,14 @@ fn main(){
             chickens = host::transmit(chickens,time.clone());
         } //Say chickens move/don't move every 15min - 4 times per hour
         chickens = host::deposit_all(chickens);
-        [chickens,collect] = host::collect(chickens);
+        [chickens,collect] = host::collect__(chickens);
         //Collect the hosts and deposits as according
         feast.append(&mut collect);
+        if INFLUX && time%PERIOD_OF_INFLUX as usize==0{
+            influx = true;
+        }
         if time%24==0{
-            host::transport(&mut chickens,&mut zones);
+            host::transport(&mut chickens,&mut zones,influx);
         }
         // let mut count:u8 = 0;
         // for i in zones.clone(){
@@ -544,11 +570,11 @@ fn main(){
         let collection_zone_no:u8 = no_of_zones as u8+1;
         //Call once
         for iter in 0..no_of_zones{
-            let [mut perc,mut perc2,mut total_hosts,mut total_hosts2] = host::zone_report(&chickens,iter);
+            let [mut perc,mut perc2,mut total_hosts,mut total_hosts2] = host::zone_report(&chickens,iter);            
+            let no = perc.clone()*total_hosts;
             perc = perc*100.0;
-            let no = perc*total_hosts;
+            let no2 = perc2.clone()*total_hosts2;        
             perc2 = perc2*100.0;
-            let no2 = perc2*total_hosts2;        
             wtr.write_record(&[
                 perc.to_string(),
                 total_hosts.to_string(),
