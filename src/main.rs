@@ -146,7 +146,7 @@ const GRIDSIZE:[[f64;2];5] = [[500.0,2000.0],[1000.0,1000.0],[800.0,800.0],[1000
 const MAX_MOVE:f64 = 25.0;
 const MEAN_MOVE:f64 = 5.0;
 const STD_MOVE:f64 = 10.0;
-const NO_OF_CHICKENS_PER_SEGMENT:[u8;5] = [5,3,3,3,3];
+const NO_OF_CHICKENS_PER_SEGMENT:[u8;5] = [50,3,3,3,3];
 //Disease 
 const TRANSFER_DISTANCE: f64 = 0.70;//maximum distance over which hosts can trasmit diseases to one another
 //Host parameters
@@ -166,7 +166,7 @@ const FAECAL_CLEANUP_FREQUENCY:usize = 1; //How many times a day do you want fae
 //or do we do time collection instead?
 const TIME_OF_COLLECTION :f64 = 12.0;
 //Resolution
-const STEP:[usize;5] = [5,8,8,8,8];  //Unit distance between hosts ->Could be used to make homogeneous zoning (Might not be very flexible a modelling decision)
+const STEP:[usize;5] = [20,8,8,8,8];  //Unit distance between hosts ->Could be used to make homogeneous zoning (Might not be very flexible a modelling decision)
 const HOUR_STEP: f64 = 1.0; //Number of times hosts move per hour
 const LENGTH: usize = 1*24; //How long do you want the simulation to be?
 //Influx? Do you want new chickens being fed into the scenario everytime the first zone exports some to the succeeding zones?
@@ -545,7 +545,7 @@ fn main(){
     // chickens = host::infect(chickens,300,1800,0);
 
     //MORE EFFICIENT WAY TO INFECT MORE CHICKENS
-    chickens = host::infect_multiple(chickens,GRIDSIZE[0][0] as u64/2,GRIDSIZE[0][1] as u64/2,100,0);
+    chickens = host::infect_multiple(chickens,GRIDSIZE[0][0] as u64/2,GRIDSIZE[0][1] as u64/2,10000,0);
 
 
     //Count number of infected
