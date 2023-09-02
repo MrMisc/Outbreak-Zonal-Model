@@ -21,6 +21,20 @@ library(ggplot2)
 library(pandoc)
 library(plotly)
 
+library("ggplot2")
+library("plotly")
+library("breakDown")
+library(dplyr)
+library(ggdark)
+library(pracma)
+library(comprehenr)
+library(ggridges)
+library(tidyverse)
+library(ggplot2)
+library(plotly)
+library(thematic)
+library(extrafont)
+library(pandoc)
 # Extract x, y coordinates
 coordinates <- strsplit(record, " ")
 
@@ -40,20 +54,39 @@ for (z in zone_unique) {
 }
 
 
+custom_colors <- c("#FFE7D3", "#FFBEC3", "#FF878E", "#C4515C")
+# data <- data.frame(x = x, y = y,zone = zone, time = time)
+# heatmap_plot <- ggplot(data, aes(x, y, frame =factor(zone))) +  
+#   scale_fill_gradientn(colors = custom_colors) +  # You can choose other color scales too
+#   labs(title = "Heatmap of Coordinates")
 
-data <- data.frame(x = x, y = y,zone = zone)
-heatmap_plot <- ggplot(data, aes(x, y, frame =factor(zone))) +
-  geom_bin2d(bins = 20) +  # Adjust bins as needed
-  scale_fill_viridis_c() +  # You can choose other color scales too
-  labs(title = "Heatmap of Coordinates")
+# # Convert ggplot to ggplotly
+# heatmap_interactive <- ggplotly(heatmap_plot)
 
-# Convert ggplot to ggplotly
-heatmap_interactive <- ggplotly(heatmap_plot)
+# # Save as HTML using pandoc
+# htmlwidgets::saveWidget(heatmap_interactive, "heatmap_output.html", selfcontained = TRUE)
+# print("Heatmap generated successfully!")
+
+
+# Create the ggplot2 plot with geom_tile and frame aesthetic
+data <- data.frame(x = x, y = y, time = time, zone = zone)
+summary_data <- data %>%
+  group_by(x, y, zone) %>%
+  summarise(count = n())
+
+# Create the ggplot2 plot with geom_tile and fill based on count
+heatmap_plot <- ggplot() +
+  geom_tile(data = summary_data, aes(x = x, y = y, fill = count, frame = zone), width = 1, height = 1) +
+  scale_fill_viridis_c() +  # You can choose other color scales
+  labs(title = "Heatmap of Event Counts")+
+  coord_cartesian(ylim = c(min(data$y), max(data$y)), xlim = c(min(data$x), max(data$x)))
+
+# Convert ggplot to plotly
+heatmap_interactive <- ggplotly(heatmap_plot, dynamicTicks = TRUE)
 
 # Save as HTML using pandoc
 htmlwidgets::saveWidget(heatmap_interactive, "heatmap_output.html", selfcontained = TRUE)
 print("Heatmap generated successfully!")
-
 
 
 
@@ -79,7 +112,7 @@ print("Heatmap generated successfully!")
 
 ##Heatmap (2d histogram)
 custom_colorscale <- c("#34FCEC", "#00D3FF", "#0099FF", "#B102E9")
-hist2d <- plot_ly(data = data, x = ~x, y = ~y, type = "histogram2d",xbins = list(start = min(data$x), end = max(data$x), size = 10),
+hist2d <- plot_ly(data = data, x = ~x, y = ~y, type = "histogram2d",xbins = list(start = min(data$x), end = max(data$x), size = 10, colors = custom_colorscale),
                   ybins = list(start = min(data$y), end = max(data$y), size = 10),
                   marker = list(colorscale = custom_colorscale)) %>%
   layout(title = "2D Histogram of Occurrences",
@@ -110,7 +143,7 @@ htmlwidgets::saveWidget(hist2d, "Heatmap_2dHistogram.html", selfcontained = TRUE
 hexbin_plot <- plot_ly(x = x, y = y, type = "scatter", mode = "markers",
                        marker = list(symbol = "hexagon", size = 10,
                                      opacity = 0.7, line = list(width = 0)),
-                       colors = "rgba(255,255,255,0.0)") %>%
+                       colors = "rgba(255,255,255,0.0)", fill =~zone) %>%
   layout(title = "Hexbin Plot Example",
          xaxis = list(title = "X"),
          yaxis = list(title = "Y"))
@@ -142,26 +175,12 @@ htmlwidgets::saveWidget(hexbin_plot, "hexbin_plot.html", selfcontained = TRUE)
 
 
 
-library("ggplot2")
-library("plotly")
-library("breakDown")
-library(ggdark)
-library(pracma)
-library(comprehenr)
-library(ggridges)
-library(tidyverse)
-library(ggplot2)
-library(plotly)
-library(thematic)
-library(extrafont)
-library(pandoc)
 #library(pandoc)
 #Get dem custom fonts
 # font_import()
 # loadfonts(device = "win")
 # actual_pars<-as.data.frame(actual_pars)
 
-setwd("C:/Users/Victus/OneDrive/Desktop/Outbreak_Zonal")
 data<-read.csv("output.csv",header = FALSE)
 colnames(data) <- c(
   "HitPct1", "TotalSamples1", "HitSamples1",
@@ -195,7 +214,7 @@ fig_dots <- data %>%
             size = ~TotalSamples1,
             customdata = ~{
               zone_data <- data[data$TimeUnit == TimeUnit, ]
-              paste(zone_data$HitSamples1, "out of ", zone_data$TotalSamples1, " hosts")
+              paste(zone_data$HitSamples1, "out of ", zone_data$TotalSamples1, " hosts @ ",zone_data$TimeUnit," hours")
             },
             hovertemplate = "%{y} % of motile hosts <br> are infected  <br> ie %{customdata}") %>%
   add_trace(
@@ -207,7 +226,7 @@ fig_dots <- data %>%
     size = ~TotalSamples2,
     customdata = ~{
               zone_data <- data[data$TimeUnit == TimeUnit, ]
-              paste(zone_data$HitSamples2, "out of ", zone_data$TotalSamples2, " hosts")
+              paste(zone_data$HitSamples2, "out of ", zone_data$TotalSamples2, " deposits @ ",zone_data$TimeUnit," hours")
             },
     hovertemplate = "%{y} % of sessile deposits <br> are infected  <br> ie %{customdata}",
     line = list(width = 0.35)
@@ -215,7 +234,7 @@ fig_dots <- data %>%
   layout(title = "Infection Trend within cultivation",
          plot_bgcolor = '#FFF8EE',
          xaxis = list(
-           title = "Zone",
+           title = "Time (Hours)",
            zerolinecolor = '#ffff',
            zerolinewidth = 0.5,
            gridcolor = '#F4F2F0'),
