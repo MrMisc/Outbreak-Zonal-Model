@@ -168,7 +168,7 @@ const TIME_OF_COLLECTION :f64 = 1.0; //Time that the host has spent in the last 
 //Resolution
 const STEP:[usize;5] = [20,8,8,8,8];  //Unit distance between hosts ->Could be used to make homogeneous zoning (Might not be very flexible a modelling decision)
 const HOUR_STEP: f64 = 1.0; //Number of times hosts move per hour
-const LENGTH: usize = 24; //How long do you want the simulation to be?
+const LENGTH: usize = 5*24; //How long do you want the simulation to be?
 //Influx? Do you want new chickens being fed into the scenario everytime the first zone exports some to the succeeding zones?
 const INFLUX:bool = true;
 const PERIOD_OF_INFLUX:u8 = 24; //How many hours before new batch of hosts are imported?
