@@ -76,7 +76,7 @@ pub struct Segment{
 
 impl Zone{
     fn add(&mut self)->[u64;4]{
-        println!("Adding to {}",self.zone);
+        // println!("Adding to {}",self.zone);
         self.capacity-=1;
         let mut origin_x:u64 = 0;
         let mut origin_y:u64 = 0;
@@ -142,7 +142,7 @@ pub struct host{
 //Note that if you want to adjust the number of zones, you have to, in addition to adjusting the individual values to your liking per zone, also need to change the slice types below!
 //Space
 const LISTOFPROBABILITIES:[f64;5] = [0.8,0.75,0.5,0.3,0.15]; //Probability of transfer of samonella per zone - starting from zone 0 onwards
-const GRIDSIZE:[[f64;2];5] = [[500.0,2000.0],[1000.0,1000.0],[800.0,800.0],[1000.0,1000.0],[1000.0,1000.0]];
+const GRIDSIZE:[[f64;2];5] = [[50.0,200.0],[1000.0,1000.0],[800.0,800.0],[1000.0,1000.0],[1000.0,1000.0]];
 const MAX_MOVE:f64 = 25.0;
 const MEAN_MOVE:f64 = 5.0;
 const STD_MOVE:f64 = 10.0;
@@ -164,11 +164,11 @@ const COLLECT_DEPOSITS: bool = false;
 const AGE_OF_DEPOSITCOLLECTION:f64 = 100.0*24.0; //If you were collecting their eggs every 3 days
 const FAECAL_CLEANUP_FREQUENCY:usize = 1; //How many times a day do you want faecal matter to be cleaned up?
 //or do we do time collection instead?
-const TIME_OF_COLLECTION :f64 = 12.0;
+const TIME_OF_COLLECTION :f64 = 1.0; //Time that the host has spent in the last zone from which you collect ONLY. NOT THE TOTAL TIME SPENT IN SIMULATION
 //Resolution
 const STEP:[usize;5] = [20,8,8,8,8];  //Unit distance between hosts ->Could be used to make homogeneous zoning (Might not be very flexible a modelling decision)
 const HOUR_STEP: f64 = 1.0; //Number of times hosts move per hour
-const LENGTH: usize = 1*24; //How long do you want the simulation to be?
+const LENGTH: usize = 24; //How long do you want the simulation to be?
 //Influx? Do you want new chickens being fed into the scenario everytime the first zone exports some to the succeeding zones?
 const INFLUX:bool = true;
 const PERIOD_OF_INFLUX:u8 = 24; //How many hours before new batch of hosts are imported?
@@ -206,7 +206,7 @@ impl host{
             if &space[zone].capacity>&0 && zone>0{ //If succeeding zones (obviously zone 0 doesn't have do to this - that needs to be done with a replace mechanism)
                 let zone_toedit:&mut Zone = &mut space[zone];
                 vector.iter_mut().for_each(|mut x| {
-                    if x.zone == zone-1 && x.time>ages[zone-1] && __>0{ //Hosts in previous zone that have spent enough time spent in previous zone
+                    if x.zone == zone-1 && x.time>ages[zone-1] && __>0 && x.motile == 0{ //Hosts in previous zone that have spent enough time spent in previous zone
                         //Find the first available segment
                         __ -= 1;
                         space[zone-1] = space[zone-1].clone().subtract(x.origin_x.clone(),x.origin_y); //move host from previous zone
@@ -379,7 +379,7 @@ impl host{
     }
     fn cleanup(inventory:Vec<host>)->Vec<host>{
         inventory.into_iter().filter_map(|mut x|{
-            if x.motile==2{
+            if x.motile==2 || (!COLLECT_DEPOSITS && x.motile == 1){ // If host consumable deposits are not desired, treat them as equivalent to faeces to clean up
                 None
             }else{
                 Some(x)
@@ -391,7 +391,7 @@ impl host{
         let vec1:Vec<host> = inventory.into_iter().filter_map(|mut x| {
             // println!("Chicken in zone {}",x.zone);
             if x.motile==0 && x.age>AGE_OF_HOSTCOLLECTION && x.zone == GRIDSIZE.len()-1{
-                println!("Collecting host(s)...{} days old",x.age/24.0);
+                // println!("Collecting host(s)...{} days old",x.age/24.0);
                 collection.push(x);
                 None
             }else if x.motile == 1 && x.age>AGE_OF_DEPOSITCOLLECTION{
@@ -409,7 +409,7 @@ impl host{
         let vec1:Vec<host> = inventory.into_iter().filter_map(|mut x| {
             // println!("Chicken in zone {}",x.zone);
             if x.motile==0 && x.time>TIME_OF_COLLECTION && x.zone == GRIDSIZE.len()-1{
-                println!("Collecting host(s)...{} days old",x.age/24.0);
+                // println!("Collecting host(s)...{} days old",x.age/24.0);
                 collection.push(x);
                 None
             }else if x.motile == 1 && x.age>AGE_OF_DEPOSITCOLLECTION && COLLECT_DEPOSITS{
@@ -545,7 +545,7 @@ fn main(){
     // chickens = host::infect(chickens,300,1800,0);
 
     //MORE EFFICIENT WAY TO INFECT MORE CHICKENS
-    chickens = host::infect_multiple(chickens,GRIDSIZE[0][0] as u64/2,GRIDSIZE[0][1] as u64/2,10000,0);
+    chickens = host::infect_multiple(chickens,GRIDSIZE[0][0] as u64/2,GRIDSIZE[0][1] as u64/2,5,0);
 
 
     //Count number of infected
@@ -577,7 +577,7 @@ fn main(){
         feast.append(&mut collect);
         if INFLUX && time%PERIOD_OF_INFLUX as usize==0 && time>0{
             influx = true;
-            println!("Influx just got changed to true");
+            // println!("Influx just got changed to true");
         }else{
             influx = false;
         }
@@ -612,10 +612,10 @@ fn main(){
 
         //Collection
         let [mut _perc,mut _perc2,mut _total_hosts,mut _total_hosts2] = host::report(&feast);
+        let _no = _perc.clone()*_total_hosts;
         _perc = _perc*100.0;
-        let _no = _perc*_total_hosts;
+        let _no2 = _perc2.clone()*_total_hosts2;            
         _perc2 = _perc2*100.0;
-        let _no2 = _perc2*_total_hosts2;            
         // println!("{} {} {} {} {} {}",perc,total_hosts,no,perc2,total_hosts2,no2);    
         // println!("{} {} {} {} {} {} {} {} {} {} {} {}",perc,total_hosts,no,perc2,total_hosts2,no2,_perc,_total_hosts,_no,_perc2,_total_hosts2,_no2);
         wtr.write_record(&[
