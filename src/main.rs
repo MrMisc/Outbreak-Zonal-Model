@@ -106,10 +106,10 @@ impl Zone{
         let mut vector:Vec<Segment> = Vec::new();
         for x in (0..grid[0]).step_by(step){
             for y in (0..grid[1]).step_by(step){
-                vector.push(Segment{zone:zone.clone(),origin_x:x,origin_y:y,range_x:step.clone() as u64,range_y:step.clone() as u64,capacity:NO_OF_CHICKENS_PER_SEGMENT[zone] as u32})
+                vector.push(Segment{zone:zone.clone(),origin_x:x,origin_y:y,range_x:step.clone() as u64,range_y:step.clone() as u64,capacity:NO_OF_HOSTS_PER_SEGMENT[zone] as u32})
             }
         }
-        Zone{segments:vector,zone:zone, capacity:(grid[0] as u32)*(grid[1] as u32)/ ((step*step) as u32)*NO_OF_CHICKENS_PER_SEGMENT[zone] as u32}
+        Zone{segments:vector,zone:zone, capacity:(grid[0] as u32)*(grid[1] as u32)/ ((step*step) as u32)*NO_OF_HOSTS_PER_SEGMENT[zone] as u32}
     }
     fn generate_full(zone:usize,grid:[u64;2],step:usize)->Zone{
         let mut vector:Vec<Segment> = Vec::new();
@@ -142,15 +142,15 @@ pub struct host{
 //Note that if you want to adjust the number of zones, you have to, in addition to adjusting the individual values to your liking per zone, also need to change the slice types below!
 //Space
 const LISTOFPROBABILITIES:[f64;5] = [0.8,0.75,0.5,0.3,0.15]; //Probability of transfer of samonella per zone - starting from zone 0 onwards
-const GRIDSIZE:[[f64;2];5] = [[500.0,2000.0],[1000.0,1000.0],[800.0,800.0],[1000.0,1000.0],[1000.0,1000.0]];
+const GRIDSIZE:[[f64;2];5] = [[2000.0,400.0],[1000.0,1000.0],[800.0,800.0],[1000.0,1000.0],[1000.0,1000.0]];
 const MAX_MOVE:f64 = 25.0;
 const MEAN_MOVE:f64 = 5.0;
 const STD_MOVE:f64 = 10.0;
-const NO_OF_CHICKENS_PER_SEGMENT:[u8;5] = [50,3,3,3,3];
+const NO_OF_HOSTS_PER_SEGMENT:[u8;5] = [50,3,3,3,3];
 //Disease 
 const TRANSFER_DISTANCE: f64 = 0.70;//maximum distance over which hosts can trasmit diseases to one another
 //Host parameters
-const PROBABILITY_OF_INFECTION:f64 = 1.0/2500.0; //probability of imported host being infected
+const PROBABILITY_OF_INFECTION:f64 = 0.12; //probability of imported host being infected
 const MEAN_AGE:f64 = 5.0*24.0; //Mean age of hosts imported (IN HOURS)
 const STD_AGE:f64 = 3.0*24.0;//Standard deviation of host age (when using normal distribution)
 const MAX_AGE:f64 = 11.0*24.0; //Maximum age of host accepted (Note: as of now, minimum age is 0.0)
@@ -161,14 +161,14 @@ const ages:[f64;5] = [5.0,1.0,1.0,1.0,1.0]; //Time hosts are expected spend in e
 //Collection
 const AGE_OF_HOSTCOLLECTION: f64 = 20.0*24.0;  //For instance if you were collecting chickens every 15 days
 const COLLECT_DEPOSITS: bool = false;
-const AGE_OF_DEPOSITCOLLECTION:f64 = 100.0*24.0; //If you were collecting their eggs every 3 days
+const AGE_OF_DEPOSITCOLLECTION:f64 = 1.0*24.0; //If you were collecting their eggs every 3 days
 const FAECAL_CLEANUP_FREQUENCY:usize = 1; //How many times a day do you want faecal matter to be cleaned up?
 //or do we do time collection instead?
 const TIME_OF_COLLECTION :f64 = 1.0; //Time that the host has spent in the last zone from which you collect ONLY. NOT THE TOTAL TIME SPENT IN SIMULATION
 //Resolution
 const STEP:[usize;5] = [20,8,8,8,8];  //Unit distance between hosts ->Could be used to make homogeneous zoning (Might not be very flexible a modelling decision)
 const HOUR_STEP: f64 = 1.0; //Number of times hosts move per hour
-const LENGTH: usize = 5*24; //How long do you want the simulation to be?
+const LENGTH: usize = 24; //How long do you want the simulation to be?
 //Influx? Do you want new chickens being fed into the scenario everytime the first zone exports some to the succeeding zones?
 const INFLUX:bool = true;
 const PERIOD_OF_INFLUX:u8 = 24; //How many hours before new batch of hosts are imported?
@@ -430,7 +430,7 @@ impl host{
                 collection.push(x.clone());
                 // None
                 let mut rng = thread_rng();
-                let roll = Uniform::new(0.0, 2.4);
+                let roll = Uniform::new(0.0, 1.0);
                 let rollnumber: f64 = rng.sample(roll);
                 if rollnumber<PROBABILITY_OF_INFECTION{
                     Some(host{infected:true,age:normal(MEAN_AGE,STD_AGE,MAX_AGE),time:0.0,..x})
@@ -497,7 +497,9 @@ impl host{
 
 fn main(){
     let mut chickens: Vec<host> = Vec::new();
-    let mut feast: Vec<host> =  Vec::new();
+    // let mut feast: Vec<host> =  Vec::new();
+    let mut hosts_in_collection:[u64;2] = [0,1];
+    let mut deposits_in_collection:[u64;2] = [0,1];
     let mut zones:Vec<Zone> = Vec::new();
 
     //Influx parameter
@@ -545,7 +547,7 @@ fn main(){
     // chickens = host::infect(chickens,300,1800,0);
 
     //MORE EFFICIENT WAY TO INFECT MORE CHICKENS
-    chickens = host::infect_multiple(chickens,GRIDSIZE[0][0] as u64/2,GRIDSIZE[0][1] as u64/2,5,0);
+    chickens = host::infect_multiple(chickens,GRIDSIZE[0][0] as u64/2,GRIDSIZE[0][1] as u64/2,12000,0);
 
 
     //Count number of infected
@@ -574,7 +576,19 @@ fn main(){
         chickens = host::deposit_all(chickens);
         [chickens,collect] = host::collect__(chickens);
         //Collect the hosts and deposits as according
-        feast.append(&mut collect);
+        // println!("Number of infected eggs in soon to be collection is {}",collect.clone().into_iter().filter(|x| x.motile == 1 && x.infected).collect::<Vec<_>>().len() as f64);
+        // feast.append(&mut collect);
+        //Update Collection numbers
+        let no_of_infected_hosts: u64 = collect.clone().into_iter().filter(|x| x.motile == 0 && x.infected).collect::<Vec<_>>().len() as u64;
+        let no_of_hosts: u64 = collect.clone().into_iter().filter(|x| x.motile == 0).collect::<Vec<_>>().len() as u64;
+        let no_of_deposits: u64 = collect.clone().into_iter().filter(|x| x.motile == 1).collect::<Vec<_>>().len() as u64;
+        let no_of_infected_deposits: u64 = collect.clone().into_iter().filter(|x| x.motile == 1 && x.infected).collect::<Vec<_>>().len() as u64;
+
+        hosts_in_collection[0] += no_of_infected_hosts;
+        hosts_in_collection[1] += no_of_hosts;
+        deposits_in_collection[0] += no_of_infected_deposits;
+        deposits_in_collection[1] += no_of_deposits;
+
         if INFLUX && time%PERIOD_OF_INFLUX as usize==0 && time>0{
             influx = true;
             // println!("Influx just got changed to true");
@@ -611,11 +625,13 @@ fn main(){
         }
 
         //Collection
-        let [mut _perc,mut _perc2,mut _total_hosts,mut _total_hosts2] = host::report(&feast);
-        let _no = _perc.clone()*_total_hosts;
-        _perc = _perc*100.0;
-        let _no2 = _perc2.clone()*_total_hosts2;            
-        _perc2 = _perc2*100.0;
+        // let [mut _perc,mut _perc2,mut _total_hosts,mut _total_hosts2] = host::report(&feast);
+        let _no = hosts_in_collection[0];
+        let _perc = (hosts_in_collection[0] as f64)/(hosts_in_collection[1] as f64) * 100.0;
+        let _no2 = deposits_in_collection[0];
+        let _perc2 = (deposits_in_collection[0] as f64)/(deposits_in_collection[1] as f64)*100.0;
+        let _total_hosts = hosts_in_collection[1];
+        let _total_hosts2 = deposits_in_collection[1];
         // println!("{} {} {} {} {} {}",perc,total_hosts,no,perc2,total_hosts2,no2);    
         // println!("{} {} {} {} {} {} {} {} {} {} {} {}",perc,total_hosts,no,perc2,total_hosts2,no2,_perc,_total_hosts,_no,_perc2,_total_hosts2,_no2);
         wtr.write_record(&[
