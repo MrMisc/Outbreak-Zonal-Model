@@ -54,30 +54,21 @@ for (z in zone_unique) {
 }
 
 
-custom_colors <- c("#FFE7D3", "#FFBEC3", "#FF878E", "#C4515C")
-# data <- data.frame(x = x, y = y,zone = zone, time = time)
-# heatmap_plot <- ggplot(data, aes(x, y, frame =factor(zone))) +  
-#   scale_fill_gradientn(colors = custom_colors) +  # You can choose other color scales too
-#   labs(title = "Heatmap of Coordinates")
-
-# # Convert ggplot to ggplotly
-# heatmap_interactive <- ggplotly(heatmap_plot)
-
-# # Save as HTML using pandoc
-# htmlwidgets::saveWidget(heatmap_interactive, "heatmap_output.html", selfcontained = TRUE)
-# print("Heatmap generated successfully!")
+# custom_colors <- c("#FFE7D3", "#FFBEC3", "#FF878E", "#C4515C")
 
 
 # Create the ggplot2 plot with geom_tile and frame aesthetic
 data <- data.frame(x = x, y = y, time = time, zone = zone)
 summary_data <- data %>%
-  group_by(x, y, zone) %>%
+  group_by(x, y, zone, time) %>%
   summarise(count = n())
+
+
 
 # Create the ggplot2 plot with geom_tile and fill based on count
 heatmap_plot <- ggplot() +
   geom_tile(data = summary_data, aes(x = x, y = y, fill = count, frame = zone), width = 1, height = 1) +
-  scale_fill_viridis_c() +  # You can choose other color scales
+  scale_fill_gradient(low = "beige", high = "red") +  # You can choose other color scales
   labs(title = "Heatmap of Event Counts")+
   coord_cartesian(ylim = c(min(data$y), max(data$y)), xlim = c(min(data$x), max(data$x)))
 
@@ -88,6 +79,52 @@ heatmap_interactive <- ggplotly(heatmap_plot, dynamicTicks = TRUE)
 htmlwidgets::saveWidget(heatmap_interactive, "heatmap_output.html", selfcontained = TRUE)
 print("Heatmap generated successfully!")
 
+
+# # Create the ggplot2 plot with geom_tile and the custom color scale
+# heatmap_plot <- ggplot() +
+#   geom_tile(data = summary_data, aes(x = x, y = y, fill = count, frame = time), width = 1, height = 1) +
+#   scale_fill_gradient(low = "beige", high = "red") +  # Use the custom color scale
+#   labs(title = "Heatmap of Event Counts") +
+#   coord_cartesian(ylim = c(min(data$y), max(data$y)), xlim = c(min(data$x), max(data$x)))
+
+# # Convert ggplot to plotly
+# heatmap_interactive <- ggplotly(heatmap_plot, dynamicTicks = TRUE)
+
+# htmlwidgets::saveWidget(heatmap_interactive, "heatmap_output_time.html", selfcontained = TRUE)
+# print("Heatmap timeseries generated successfully!")
+
+
+
+zone_unique <- unique(zone)
+zone_plots <- list()
+
+
+for (z in zone_unique) {
+  data_zone <- data.frame(x = x[zone == z], y = y[zone == z], time = time[zone == z], zone = zone[zone == z])
+  
+  # Create the ggplot2 plot with geom_tile and custom color scale
+  summary_data <- data_zone %>%
+    group_by(x, y, zone, time) %>%
+    summarise(count = n())
+  
+  custom_color_scale <- scale_fill_gradient(low = "beige", high = "red")
+  
+  heatmap_plot <- ggplot() +
+    geom_tile(data = summary_data, aes(x = x, y = y, fill = count, frame = time), width = 1, height = 1) +
+    custom_color_scale +
+    labs(title = paste("Zone", z, ": Heatmap of Event Counts")) +
+    coord_cartesian(ylim = c(min(data$y), max(data$y)), xlim = c(min(data$x), max(data$x)))
+  
+  # Convert ggplot to plotly
+  heatmap_interactive <- ggplotly(heatmap_plot, dynamicTicks = TRUE)
+  
+  # Save the plot as an HTML file with a unique name based on the zone
+  html_filename <- paste("heatmap_timeseries_zone_", z, ".html", sep = "")
+  htmlwidgets::saveWidget(heatmap_interactive, html_filename, selfcontained = TRUE)
+}
+
+
+print("Heatmap timeseries generated successfully!")
 
 
 #Another try at 2d hist using geom_tile
